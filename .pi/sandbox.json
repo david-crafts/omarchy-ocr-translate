@@ -1,0 +1,13 @@
+{
+  "filesystem": {
+    "allowRead": [
+      "/home/dawei/.pi/agent/npm/node_modules/pi-sandbox/README.md",
+      "/usr/bin/omarchy-plugin-list",
+      "/usr/share/omarchy/default/hypr/require_all.lua",
+      "/usr/bin/omarchy-menu-keybindings",
+      "/usr/bin/omarchy-plugin-validate",
+      "/usr/share/omarchy/default/hypr/bindings/windows.lua",
+      "/usr/share/omarchy/default/hypr/bindings/apps.lua"
+    ]
+  }
+}

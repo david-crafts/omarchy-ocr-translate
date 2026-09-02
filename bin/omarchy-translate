@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+src=$(cat)
+[[ -n $src ]] || { echo "原文为空" >&2; exit 3; }
+
+ENV_FILE="${OMARCHY_DEEPSEEK_ENV:-$HOME/.config/omarchy/secrets/deepseek.env}"
+[[ -f $ENV_FILE ]] || { echo "缺少密钥文件: $ENV_FILE" >&2; exit 2; }
+# shellcheck disable=SC1090
+set -a; source "$ENV_FILE"; set +a
+[[ -n ${DEEPSEEK_API_KEY:-} ]] || { echo "DEEPSEEK_API_KEY 为空" >&2; exit 2; }
+
+sys='Translate English into Simplified Chinese only. Output only the Chinese translation. No quotes, no explanation, no other language pairs.'
+
+body=$(jq -n --arg q "$src" --arg sys "$sys" '{
+  model: "deepseek-chat",
+  stream: false,
+  messages: [
+    {role: "system", content: $sys},
+    {role: "user", content: $q}
+  ]
+}')
+
+tmp=$(mktemp)
+trap 'rm -f "$tmp"' EXIT
+code=$(curl -sS -o "$tmp" -w '%{http_code}' \
+  --max-time 60 \
+  https://api.deepseek.com/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${DEEPSEEK_API_KEY}" \
+  -d "$body") || { echo "网络错误" >&2; exit 4; }
+
+if [[ $code != 200 ]]; then
+  jq -r '.error.message // .' "$tmp" >&2 || cat "$tmp" >&2
+  echo "HTTP $code" >&2
+  exit 5
+fi
+
+jq -er '.choices[0].message.content' "$tmp"
