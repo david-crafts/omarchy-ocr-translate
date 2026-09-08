@@ -4,11 +4,11 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_SRC="$ROOT/plugin"
-PLUGIN_DEST="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/plugins/dawei.translate"
-BIN_SRC="$ROOT/bin/omarchy-translate"
-BIN_DEST="${HOME}/.local/bin/omarchy-translate"
+PLUGIN_DEST="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/plugins/omarchy.ocr-translate"
+BIN_SRC="$ROOT/bin/omarchy-ocr-translate"
+BIN_DEST="${HOME}/.local/bin/omarchy-ocr-translate"
 
-[[ -f "$PLUGIN_SRC/manifest.json" && -f "$PLUGIN_SRC/Translate.qml" ]] || {
+[[ -f "$PLUGIN_SRC/manifest.json" && -f "$PLUGIN_SRC/OcrTranslate.qml" ]] || {
   echo "missing plugin files under $PLUGIN_SRC" >&2
   exit 1
 }
@@ -22,7 +22,7 @@ if [[ -L "$PLUGIN_DEST" ]]; then
   rm -f "$PLUGIN_DEST"
 fi
 mkdir -p "$PLUGIN_DEST"
-cp -f "$PLUGIN_SRC/manifest.json" "$PLUGIN_SRC/Translate.qml" "$PLUGIN_DEST/"
+cp -f "$PLUGIN_SRC/manifest.json" "$PLUGIN_SRC/OcrTranslate.qml" "$PLUGIN_DEST/"
 
 mkdir -p "$(dirname "$BIN_DEST")"
 ln -sfn "$BIN_SRC" "$BIN_DEST"

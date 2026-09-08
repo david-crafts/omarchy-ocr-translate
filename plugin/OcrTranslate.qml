@@ -55,7 +55,7 @@ Item {
   function dismiss() {
     root.opened = false
     if (root.shell && typeof root.shell.hide === "function")
-      root.shell.hide((root.manifest && root.manifest.id) || "dawei.translate")
+      root.shell.hide((root.manifest && root.manifest.id) || "omarchy.ocr-translate")
   }
 
   function toggle() {
@@ -119,7 +119,7 @@ Item {
 
   Process {
     id: translateProc
-    command: [Quickshell.env("HOME") + "/.local/bin/omarchy-translate"]
+    command: [Quickshell.env("HOME") + "/.local/bin/omarchy-ocr-translate"]
     stdinEnabled: true
     stdout: StdioCollector { id: outCol; waitForEnd: true }
     stderr: StdioCollector { id: errCol; waitForEnd: true }
@@ -141,7 +141,7 @@ Item {
     visible: root.opened
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
-    WlrLayershell.namespace: "omarchy-translate"
+    WlrLayershell.namespace: "omarchy-ocr-translate"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
     exclusionMode: ExclusionMode.Ignore

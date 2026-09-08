@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "id": "dawei.translate",
-  "name": "Translate",
+  "id": "omarchy.ocr-translate",
+  "name": "OCR Translate",
   "version": "1.0.0",
   "author": "dawei",
-  "description": "Edit clipboard text and translate with DeepSeek",
+  "description": "OCR screen text and translate English to Simplified Chinese with DeepSeek",
   "kinds": ["overlay"],
   "keepLoaded": true,
   "entryPoints": {
-    "overlay": "Translate.qml"
+    "overlay": "OcrTranslate.qml"
   }
 }
