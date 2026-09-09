@@ -30,6 +30,7 @@ Item {
   property int contentSpacing: Style.spacing.md
   property int cardWidth: Math.min(Style.space(520), panel.width - Style.gapsOut * 2)
   property int cardHeight: Math.min(Style.space(560), panel.height - Style.gapsOut * 2)
+  readonly property string translateBin: Qt.resolvedUrl("bin/omarchy-ocr-translate").toString().replace(/^file:\/\//, "")
 
   function open(payloadJson) {
     root.opened = true
@@ -119,7 +120,7 @@ Item {
 
   Process {
     id: translateProc
-    command: [Quickshell.env("HOME") + "/.local/bin/omarchy-ocr-translate"]
+    command: [root.translateBin]
     stdinEnabled: true
     stdout: StdioCollector { id: outCol; waitForEnd: true }
     stderr: StdioCollector { id: errCol; waitForEnd: true }
