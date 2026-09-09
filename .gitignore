@@ -1,0 +1,7 @@
+.pi/
+*.env
+!secrets/*.env.example
+.DS_Store
+*~
+*.bak
+*.bak.*
