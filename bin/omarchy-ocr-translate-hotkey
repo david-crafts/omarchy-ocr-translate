@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# SUPER+SHIFT+T: hide overlay, OCR a region (same pipeline as omarchy-capture-text),
+# then summon dawei.ocr-translate. Do not call omarchy-capture-text: cancel also
+# exits 0 and would otherwise translate leftover clipboard.
+set -euo pipefail
+
+PLUGIN_ID="dawei.ocr-translate"
+
+omarchy-shell -q shell hide "$PLUGIN_ID"
+# Overlay unmap is async; wait so the freeze/picker is not covered.
+sleep 0.15
+
+# Keep hyprpicker alive until after grim captures so the screenshot sees the
+# frozen overlay rather than live content shifting during teardown.
+cleanup_freeze() {
+  [[ -n ${PID:-} ]] && kill "$PID" 2>/dev/null || true
+}
+trap cleanup_freeze EXIT
+
+hyprpicker -r -z >/dev/null 2>&1 &
+PID=$!
+sleep .1
+SELECTION=$(slurp 2>/dev/null) || true
+
+# Cancel: exit 0, do not write clipboard, do not open overlay.
+[[ -z ${SELECTION:-} ]] && exit 0
+
+if ! TEXT=$(grim -g "$SELECTION" - | tesseract stdin stdout --oem 1 --psm 6 -l "${OMARCHY_OCR_LANGS:-eng}" --dpi 300 -c preserve_interword_spaces=1 2>/dev/null); then
+  omarchy-notification-send -g 󰴑 "OCR failed"
+  exit 1
+fi
+
+# Empty OCR: notify, do not write clipboard, do not open overlay.
+if [[ -z $TEXT ]]; then
+  omarchy-notification-send -g 󰴑 "OCR found no text"
+  exit 1
+fi
+
+printf "%s" "$TEXT" | wl-copy
+omarchy-notification-send -g 󰴑 "Copied text from selection to clipboard"
+omarchy-shell shell summon "$PLUGIN_ID"

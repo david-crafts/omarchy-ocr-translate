@@ -55,7 +55,7 @@ Item {
   function dismiss() {
     root.opened = false
     if (root.shell && typeof root.shell.hide === "function")
-      root.shell.hide((root.manifest && root.manifest.id) || "omarchy.ocr-translate")
+      root.shell.hide((root.manifest && root.manifest.id) || "dawei.ocr-translate")
   }
 
   function toggle() {
