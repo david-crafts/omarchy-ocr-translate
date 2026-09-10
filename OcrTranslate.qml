@@ -305,27 +305,53 @@ Item {
           Layout.fillWidth: true
           Layout.fillHeight: true
           Layout.preferredHeight: 1
+          Layout.minimumHeight: 0
+          Layout.maximumHeight: 65535
           radius: root.cornerRadius
           color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.06)
+          clip: true
 
-          TextEdit {
-            id: sourceArea
+          Flickable {
+            id: sourceFlick
             anchors.fill: parent
             anchors.margins: Style.spacing.sm
-            wrapMode: TextEdit.Wrap
-            color: root.foreground
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.body
-            activeFocusOnPress: true
-            selectByMouse: true
-            Keys.onPressed: function(event) {
-              if (event.key === Qt.Key_Escape) {
-                root.dismiss()
-                event.accepted = true
-              } else if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
-                         && !(event.modifiers & Qt.ShiftModifier)) {
-                root.startTranslate()
-                event.accepted = true
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            flickableDirection: Flickable.VerticalFlick
+            contentWidth: width
+            contentHeight: Math.max(sourceArea.paintedHeight, height)
+            interactive: contentHeight > height
+            QQC.ScrollBar.vertical: QQC.ScrollBar {
+              policy: sourceFlick.contentHeight > sourceFlick.height ? QQC.ScrollBar.AsNeeded : QQC.ScrollBar.AlwaysOff
+            }
+
+            function ensureVisible(r) {
+              if (contentY >= r.y)
+                contentY = r.y
+              else if (contentY + height <= r.y + r.height)
+                contentY = r.y + r.height - height
+            }
+
+            TextEdit {
+              id: sourceArea
+              width: sourceFlick.width
+              wrapMode: TextEdit.Wrap
+              textFormat: TextEdit.PlainText
+              color: root.foreground
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.body
+              activeFocusOnPress: true
+              selectByMouse: true
+              onCursorRectangleChanged: sourceFlick.ensureVisible(cursorRectangle)
+              Keys.onPressed: function(event) {
+                if (event.key === Qt.Key_Escape) {
+                  root.dismiss()
+                  event.accepted = true
+                } else if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
+                           && !(event.modifiers & Qt.ShiftModifier)) {
+                  root.startTranslate()
+                  event.accepted = true
+                }
               }
             }
           }
@@ -344,24 +370,43 @@ Item {
           Layout.fillWidth: true
           Layout.fillHeight: true
           Layout.preferredHeight: 1
+          Layout.minimumHeight: 0
+          Layout.maximumHeight: 65535
           radius: root.cornerRadius
           color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.06)
+          clip: true
 
-          QQC.TextArea {
-            id: resultArea
+          Flickable {
+            id: resultFlick
             anchors.fill: parent
             anchors.margins: Style.spacing.sm
-            readOnly: true
-            wrapMode: TextEdit.Wrap
-            text: root.busy ? "翻译中…" : root.resultText
-            color: root.foreground
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.body
-            background: Item {}
-            Keys.onPressed: function(event) {
-              if (event.key === Qt.Key_Escape) {
-                root.dismiss()
-                event.accepted = true
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            flickableDirection: Flickable.VerticalFlick
+            contentWidth: width
+            contentHeight: Math.max(resultArea.paintedHeight, height)
+            interactive: contentHeight > height
+            QQC.ScrollBar.vertical: QQC.ScrollBar {
+              policy: resultFlick.contentHeight > resultFlick.height ? QQC.ScrollBar.AsNeeded : QQC.ScrollBar.AlwaysOff
+            }
+
+            TextEdit {
+              id: resultArea
+              width: resultFlick.width
+              readOnly: true
+              wrapMode: TextEdit.Wrap
+              textFormat: TextEdit.PlainText
+              text: root.busy ? "翻译中…" : root.resultText
+              color: root.foreground
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.body
+              selectByMouse: true
+              onPaintedHeightChanged: resultFlick.contentY = 0
+              Keys.onPressed: function(event) {
+                if (event.key === Qt.Key_Escape) {
+                  root.dismiss()
+                  event.accepted = true
+                }
               }
             }
           }
