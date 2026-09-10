@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# DeepSeek Chat Completions provider for omarchy-ocr-translate.
+#
+# Contract:
+#   stdin  = source text
+#   stdout = translation only
+#   env    = OCR_TRANSLATE_FROM / OCR_TRANSLATE_TO (codes)
+#            OCR_TRANSLATE_FROM_NAME / OCR_TRANSLATE_TO_NAME (English names)
+#   args   = --from LANG --to LANG (same codes; optional if env is set)
+#   exit   = 0 on success; non-zero on failure (message on stderr)
+#   secret = ~/.config/omarchy/secrets/deepseek.env  (DEEPSEEK_API_KEY)
+#            never export the key into the desktop session
+set -euo pipefail
+
+FROM="${OCR_TRANSLATE_FROM:-}"
+TO="${OCR_TRANSLATE_TO:-}"
+FROM_NAME="${OCR_TRANSLATE_FROM_NAME:-}"
+TO_NAME="${OCR_TRANSLATE_TO_NAME:-}"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --from)
+      FROM=${2:-}
+      shift 2
+      ;;
+    --to)
+      TO=${2:-}
+      shift 2
+      ;;
+    *)
+      echo "unknown argument: $1" >&2
+      exit 1
+      ;;
+  esac
+done
+
+[[ -n $FROM && -n $TO ]] || { echo "missing --from/--to (or OCR_TRANSLATE_FROM/TO)" >&2; exit 1; }
+
+if [[ -z $FROM_NAME || -z $TO_NAME ]]; then
+  ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  lookup() {
+    awk -F'\t' -v c="$1" '
+      /^[[:space:]]*#/ { next }
+      NF < 2 { next }
+      $1 == c { print $2; found=1; exit }
+      END { if (!found) exit 1 }
+    ' "$ROOT/languages.tsv"
+  }
+  FROM_NAME=${FROM_NAME:-$(lookup "$FROM")} || { echo "unknown source language: $FROM" >&2; exit 1; }
+  TO_NAME=${TO_NAME:-$(lookup "$TO")} || { echo "unknown target language: $TO" >&2; exit 1; }
+fi
+
+src=$(cat)
+[[ -n $src ]] || { echo "原文为空" >&2; exit 3; }
+
+ENV_FILE="${OMARCHY_DEEPSEEK_ENV:-$HOME/.config/omarchy/secrets/deepseek.env}"
+[[ -f $ENV_FILE ]] || { echo "缺少密钥文件: $ENV_FILE" >&2; exit 2; }
+# shellcheck disable=SC1090
+set -a; source "$ENV_FILE"; set +a
+[[ -n ${DEEPSEEK_API_KEY:-} ]] || { echo "DEEPSEEK_API_KEY 为空" >&2; exit 2; }
+
+sys="Translate ${FROM_NAME} into ${TO_NAME} only. Output only the ${TO_NAME} translation. No quotes, no explanation, no other language pairs."
+
+body=$(jq -n --arg q "$src" --arg sys "$sys" '{
+  model: "deepseek-chat",
+  stream: false,
+  messages: [
+    {role: "system", content: $sys},
+    {role: "user", content: $q}
+  ]
+}')
+
+tmp=$(mktemp)
+trap 'rm -f "$tmp"' EXIT
+code=$(curl -sS -o "$tmp" -w '%{http_code}' \
+  --max-time 60 \
+  https://api.deepseek.com/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${DEEPSEEK_API_KEY}" \
+  -d "$body") || { echo "网络错误" >&2; exit 4; }
+
+if [[ $code != 200 ]]; then
+  jq -r '.error.message // .' "$tmp" >&2 || cat "$tmp" >&2
+  echo "HTTP $code" >&2
+  exit 5
+fi
+
+jq -er '.choices[0].message.content' "$tmp"

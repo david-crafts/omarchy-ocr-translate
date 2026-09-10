@@ -3,6 +3,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 import QtQuick
 import QtQuick.Controls as QQC
+import QtQuick.Layouts
 import qs.Commons
 import qs.Ui
 
@@ -18,6 +19,20 @@ Item {
   property int translateGen: 0
   property int runningGen: 0
   property string pendingTranslateText: ""
+  property bool langsReady: false
+
+  property string sourceLang: "en"
+  property string targetLang: "zh-CN"
+  readonly property var languageOptions: [
+    { value: "en", label: "English" },
+    { value: "zh-CN", label: "简体中文" },
+    { value: "zh-TW", label: "繁體中文" },
+    { value: "ja", label: "日本語" },
+    { value: "ko", label: "한국어" },
+    { value: "es", label: "Español" },
+    { value: "fr", label: "Français" },
+    { value: "de", label: "Deutsch" }
+  ]
 
   property color background: Color.menu.background
   property color foreground: Color.menu.text
@@ -30,7 +45,50 @@ Item {
   property int contentSpacing: Style.spacing.md
   property int cardWidth: Math.min(Style.space(520), panel.width - Style.gapsOut * 2)
   property int cardHeight: Math.min(Style.space(560), panel.height - Style.gapsOut * 2)
-  readonly property string translateBin: Qt.resolvedUrl("bin/omarchy-ocr-translate").toString().replace(/^file:\/\//, "")
+  readonly property string translateBin: {
+    var dir = (root.manifest && root.manifest.__sourceDir) ? String(root.manifest.__sourceDir).replace(/\/$/, "") : ""
+    if (dir.length)
+      return dir + "/bin/omarchy-ocr-translate"
+    return Quickshell.env("HOME") + "/.config/omarchy/plugins/dawei.ocr-translate/bin/omarchy-ocr-translate"
+  }
+  readonly property string langFilePath: Quickshell.env("HOME") + "/.config/omarchy/ocr-translate/languages.env"
+
+  function knownLang(code) {
+    for (var i = 0; i < languageOptions.length; i++) {
+      if (languageOptions[i].value === code) return true
+    }
+    return false
+  }
+
+  function applyLangFile(raw) {
+    var from = root.sourceLang
+    var to = root.targetLang
+    var lines = String(raw || "").split(/\n/)
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].replace(/\r$/, "")
+      if (!line || line.charAt(0) === "#") continue
+      var eq = line.indexOf("=")
+      if (eq <= 0) continue
+      var key = line.substring(0, eq)
+      var value = line.substring(eq + 1)
+      if (key === "FROM") from = value
+      else if (key === "TO") to = value
+    }
+    if (knownLang(from)) root.sourceLang = from
+    if (knownLang(to)) root.targetLang = to
+  }
+
+  function saveLangs() {
+    saveLangProc.command = [
+      "bash", "-c",
+      "mkdir -p \"$HOME/.config/omarchy/ocr-translate\" && printf 'FROM=%s\\nTO=%s\\n' \"$1\" \"$2\" > \"$HOME/.config/omarchy/ocr-translate/languages.env\"",
+      "ocr-translate-save-langs",
+      root.sourceLang,
+      root.targetLang
+    ]
+    saveLangProc.running = false
+    saveLangProc.running = true
+  }
 
   function open(payloadJson) {
     root.opened = true
@@ -65,6 +123,14 @@ Item {
   }
 
   function startTranslate() {
+    if (!root.langsReady) {
+      var waitGen = root.translateGen
+      Qt.callLater(function() {
+        if (root.translateGen !== waitGen) return
+        root.startTranslate()
+      })
+      return
+    }
     var src = sourceArea.text
     if (!src || src.length === 0) {
       root.busy = false
@@ -87,6 +153,30 @@ Item {
     }
     translateProc.stdinEnabled = true
     translateProc.running = true
+  }
+
+  FileView {
+    id: langFile
+    path: root.langFilePath
+    watchChanges: false
+    atomicWrites: true
+    printErrors: false
+    onLoaded: {
+      root.applyLangFile(text())
+      root.langsReady = true
+    }
+    onLoadFailed: root.langsReady = true
+  }
+
+  Timer {
+    interval: 250
+    running: true
+    repeat: false
+    onTriggered: root.langsReady = true
+  }
+
+  Process {
+    id: saveLangProc
   }
 
   Process {
@@ -120,7 +210,7 @@ Item {
 
   Process {
     id: translateProc
-    command: [root.translateBin]
+    command: [root.translateBin, "--from", root.sourceLang, "--to", root.targetLang]
     stdinEnabled: true
     stdout: StdioCollector { id: outCol; waitForEnd: true }
     stderr: StdioCollector { id: errCol; waitForEnd: true }
@@ -169,7 +259,7 @@ Item {
 
       MouseArea { anchors.fill: parent; onClicked: {} }
 
-      Column {
+      ColumnLayout {
         anchors.fill: parent
         anchors.topMargin: card.contentTopInset
         anchors.rightMargin: card.contentRightInset
@@ -177,18 +267,44 @@ Item {
         anchors.leftMargin: card.contentLeftInset
         spacing: root.contentSpacing
 
-        Text {
-          width: parent.width
-          text: "原文"
-          color: root.foreground
-          opacity: 0.7
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.bodySmall
+        RowLayout {
+          Layout.fillWidth: true
+          spacing: root.contentSpacing
+          z: 2
+
+          Dropdown {
+            id: fromDrop
+            Layout.fillWidth: true
+            label: "原文"
+            fontFamily: root.fontFamily
+            foreground: root.foreground
+            options: root.languageOptions
+            value: root.sourceLang
+            onChanged: function(v) {
+              root.sourceLang = v
+              root.saveLangs()
+            }
+          }
+
+          Dropdown {
+            id: toDrop
+            Layout.fillWidth: true
+            label: "译文"
+            fontFamily: root.fontFamily
+            foreground: root.foreground
+            options: root.languageOptions
+            value: root.targetLang
+            onChanged: function(v) {
+              root.targetLang = v
+              root.saveLangs()
+            }
+          }
         }
 
         Rectangle {
-          width: parent.width
-          height: Math.floor((parent.height - root.contentSpacing * 4 - Style.font.bodySmall * 2 - Style.font.title) / 2)
+          Layout.fillWidth: true
+          Layout.fillHeight: true
+          Layout.preferredHeight: 1
           radius: root.cornerRadius
           color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.06)
 
@@ -216,17 +332,18 @@ Item {
         }
 
         Text {
-          width: parent.width
-          text: root.busy ? "翻译中…" : "译文"
+          Layout.fillWidth: true
+          text: root.busy ? "翻译中…" : " "
           color: root.foreground
-          opacity: root.busy ? 1 : 0.7
+          opacity: root.busy ? 1 : 0
           font.family: root.fontFamily
           font.pixelSize: root.busy ? Style.font.title : Style.font.bodySmall
         }
 
         Rectangle {
-          width: parent.width
-          height: parent.height - y
+          Layout.fillWidth: true
+          Layout.fillHeight: true
+          Layout.preferredHeight: 1
           radius: root.cornerRadius
           color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.06)
 

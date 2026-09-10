@@ -14,6 +14,10 @@ DEST="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/plugins/$PLUGIN_ID"
   echo "missing CLI scripts under $ROOT/bin" >&2
   exit 1
 }
+[[ -x "$ROOT/bin/providers/deepseek" && -f "$ROOT/bin/languages.tsv" ]] || {
+  echo "missing provider files under $ROOT/bin" >&2
+  exit 1
+}
 
 if [[ "$ROOT" == "$DEST" ]]; then
   echo "already in $DEST"
@@ -24,10 +28,12 @@ if [[ -L "$DEST" ]]; then
   rm -f "$DEST"
 fi
 
-mkdir -p "$DEST/bin"
+mkdir -p "$DEST/bin/providers"
 cp -f "$ROOT/manifest.json" "$ROOT/OcrTranslate.qml" "$DEST/"
-cp -f "$ROOT/bin/omarchy-ocr-translate" "$ROOT/bin/omarchy-ocr-translate-hotkey" "$DEST/bin/"
+cp -f "$ROOT/bin/omarchy-ocr-translate" "$ROOT/bin/omarchy-ocr-translate-hotkey" "$ROOT/bin/languages.tsv" "$DEST/bin/"
+cp -f "$ROOT/bin/providers/"* "$DEST/bin/providers/"
 chmod +x "$DEST/bin/omarchy-ocr-translate" "$DEST/bin/omarchy-ocr-translate-hotkey"
+chmod +x "$DEST/bin/providers/"*
 
 echo "copied plugin -> $DEST"
 echo "enable with: omarchy plugin enable $PLUGIN_ID"

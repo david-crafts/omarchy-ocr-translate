@@ -1,39 +1,118 @@
 #!/usr/bin/env bash
+# Dispatcher: parse language/provider, then exec bin/providers/<name>.
+# stdin = source text; stdout = translation only. See README "Adding another
+# translation provider".
 set -euo pipefail
 
-src=$(cat)
-[[ -n $src ]] || { echo "原文为空" >&2; exit 3; }
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LANGS_TSV="$ROOT/languages.tsv"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/ocr-translate"
+LANG_FILE="$CONFIG_DIR/languages.env"
+PROVIDER_FILE="$CONFIG_DIR/provider"
 
-ENV_FILE="${OMARCHY_DEEPSEEK_ENV:-$HOME/.config/omarchy/secrets/deepseek.env}"
-[[ -f $ENV_FILE ]] || { echo "缺少密钥文件: $ENV_FILE" >&2; exit 2; }
-# shellcheck disable=SC1090
-set -a; source "$ENV_FILE"; set +a
-[[ -n ${DEEPSEEK_API_KEY:-} ]] || { echo "DEEPSEEK_API_KEY 为空" >&2; exit 2; }
+DEFAULT_FROM="en"
+DEFAULT_TO="zh-CN"
+DEFAULT_PROVIDER="deepseek"
 
-sys='Translate English into Simplified Chinese only. Output only the Chinese translation. No quotes, no explanation, no other language pairs.'
+FROM=""
+TO=""
+PROVIDER=""
 
-body=$(jq -n --arg q "$src" --arg sys "$sys" '{
-  model: "deepseek-chat",
-  stream: false,
-  messages: [
-    {role: "system", content: $sys},
-    {role: "user", content: $q}
-  ]
-}')
+usage() {
+  cat <<EOF
+Usage: omarchy-ocr-translate [--from LANG] [--to LANG] [--provider NAME]
 
-tmp=$(mktemp)
-trap 'rm -f "$tmp"' EXIT
-code=$(curl -sS -o "$tmp" -w '%{http_code}' \
-  --max-time 60 \
-  https://api.deepseek.com/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer ${DEEPSEEK_API_KEY}" \
-  -d "$body") || { echo "网络错误" >&2; exit 4; }
+Read source text on stdin and write only the translation on stdout.
 
-if [[ $code != 200 ]]; then
-  jq -r '.error.message // .' "$tmp" >&2 || cat "$tmp" >&2
-  echo "HTTP $code" >&2
-  exit 5
+  --from LANG       Source language code (default: $DEFAULT_FROM, or $LANG_FILE)
+  --to LANG         Target language code (default: $DEFAULT_TO, or $LANG_FILE)
+  --provider NAME   Provider script under $ROOT/providers/ (default: $DEFAULT_PROVIDER)
+
+Language codes are listed in $LANGS_TSV.
+Provider is also read from $PROVIDER_FILE (single line) when --provider is omitted.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --from)
+      [[ $# -ge 2 ]] || { echo "missing value for --from" >&2; exit 1; }
+      FROM=$2
+      shift 2
+      ;;
+    --to)
+      [[ $# -ge 2 ]] || { echo "missing value for --to" >&2; exit 1; }
+      TO=$2
+      shift 2
+      ;;
+    --provider)
+      [[ $# -ge 2 ]] || { echo "missing value for --provider" >&2; exit 1; }
+      PROVIDER=$2
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "unknown argument: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+done
+
+load_kv() {
+  local file=$1 key=$2
+  [[ -f $file ]] || return 0
+  awk -F= -v k="$key" '
+    /^[[:space:]]*#/ { next }
+    /^[[:space:]]*$/ { next }
+    $1 == k { sub(/^[^=]+=/, ""); gsub(/\r/, ""); print; exit }
+  ' "$file"
+}
+
+if [[ -z $FROM ]]; then
+  FROM=$(load_kv "$LANG_FILE" FROM || true)
+fi
+if [[ -z $TO ]]; then
+  TO=$(load_kv "$LANG_FILE" TO || true)
+fi
+FROM=${FROM:-$DEFAULT_FROM}
+TO=${TO:-$DEFAULT_TO}
+
+if [[ -z $PROVIDER && -f $PROVIDER_FILE ]]; then
+  PROVIDER=$(head -n1 "$PROVIDER_FILE" | tr -d '[:space:]')
+fi
+PROVIDER=${PROVIDER:-$DEFAULT_PROVIDER}
+
+if [[ ! $PROVIDER =~ ^[a-zA-Z0-9_-]+$ ]]; then
+  echo "invalid provider name: $PROVIDER" >&2
+  exit 2
 fi
 
-jq -er '.choices[0].message.content' "$tmp"
+lang_name() {
+  local code=$1
+  awk -F'\t' -v c="$code" '
+    /^[[:space:]]*#/ { next }
+    NF < 2 { next }
+    $1 == c { print $2; found=1; exit }
+    END { if (!found) exit 1 }
+  ' "$LANGS_TSV"
+}
+
+FROM_NAME=$(lang_name "$FROM") || { echo "unknown source language: $FROM" >&2; exit 1; }
+TO_NAME=$(lang_name "$TO") || { echo "unknown target language: $TO" >&2; exit 1; }
+
+script="$ROOT/providers/$PROVIDER"
+if [[ ! -x $script ]]; then
+  echo "unknown or non-executable provider: $PROVIDER ($script)" >&2
+  exit 2
+fi
+
+export OCR_TRANSLATE_FROM="$FROM"
+export OCR_TRANSLATE_TO="$TO"
+export OCR_TRANSLATE_FROM_NAME="$FROM_NAME"
+export OCR_TRANSLATE_TO_NAME="$TO_NAME"
+
+exec "$script" --from "$FROM" --to "$TO"

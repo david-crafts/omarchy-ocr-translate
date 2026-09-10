@@ -28,3 +28,9 @@ Delete it only if you want it gone:
 ```bash
 rm -f ~/.config/omarchy/secrets/deepseek.env
 ```
+
+Language and provider preferences (optional):
+
+```bash
+rm -rf ~/.config/omarchy/ocr-translate
+```

@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "id": "dawei.ocr-translate",
   "name": "OCR Translate",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": "david-crafts",
   "license": "MIT",
   "homepage": "https://github.com/david-crafts/omarchy-ocr-translate",
-  "description": "OCR a screen region and translate English to Simplified Chinese with DeepSeek",
+  "description": "OCR a screen region and translate between languages with DeepSeek",
   "kinds": ["overlay"],
   "keepLoaded": true,
   "entryPoints": {

@@ -1,0 +1,9 @@
+# code	English name (tab-separated). Used by the dispatcher and providers.
+en	English
+zh-CN	Simplified Chinese
+zh-TW	Traditional Chinese
+ja	Japanese
+ko	Korean
+es	Spanish
+fr	French
+de	German
