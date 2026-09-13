@@ -2,7 +2,7 @@
 
 Screen-region OCR and translation for [Omarchy](https://omarchy.org/).
 
-Press **Super+Shift+T**, select a region, and an overlay opens with the recognized text already translated. Default direction is English → Simplified Chinese; change both languages on the overlay.
+Press **Super+Shift+T**, select a region, and an overlay opens with the recognized text already translated. Press **Super+Shift+D** to skip OCR and translate the current selection. Default direction is English → Simplified Chinese; change both languages on the overlay.
 
 ## Install
 
@@ -75,25 +75,41 @@ Or pass `--provider NAME` to `bin/omarchy-ocr-translate`.
 
 ### Keybinding
 
-Add this to `~/.config/hypr/bindings.lua`:
+Omarchy user keys live in `~/.config/hypr/bindings.lua`. Add:
 
 ```lua
-o.bind("SUPER + SHIFT + T", "OCR Translate",
-  os.getenv("HOME") .. "/.config/omarchy/plugins/dawei.ocr-translate/bin/omarchy-ocr-translate-hotkey")
+dofile(os.getenv("HOME") .. "/.config/omarchy/plugins/dawei.ocr-translate/hypr/bindings.lua")
+ocr_translate.bind()
 ```
 
-Reload Hyprland (`hyprctl reload`) and confirm `hyprctl configerrors` is empty.
+Factory defaults:
 
-Leave **Super+T** (window float) and **Super+Ctrl+Print** (system OCR to clipboard) alone.
+| Chord | Action |
+| --- | --- |
+| **Super+Shift+T** | OCR a screen region, then translate |
+| **Super+Shift+D** | Copy the selection (same chords as Super+C) and translate. Replaces the preinstalled Docker TUI bind. |
+
+Leave **Super+T** (window float) and **Super+Ctrl+Print** (system OCR to clipboard) alone. Do not ship **Super+S** as a default: that is Omarchy's scratchpad.
+
+To use different chords, call `ocr_translate.bind` after the `dofile` (same unbind-then-bind pattern as other Omarchy overrides; `bind()` unbinds the keys it takes):
+
+```lua
+dofile(os.getenv("HOME") .. "/.config/omarchy/plugins/dawei.ocr-translate/hypr/bindings.lua")
+ocr_translate.bind({ ocr = "SUPER + S", selection = "SUPER + D" })
+```
+
+Call `bind` once. The override above replaces the factory chords; it does not also keep Super+Shift+T / Super+Shift+D.
+
+Reload Hyprland (`hyprctl reload`) and confirm `hyprctl configerrors` is empty.
 
 ## How it works
 
 1. The hotkey hides the overlay if it is already open, so it does not cover the screen.
-2. The same pipeline as `omarchy capture text` freezes the display, lets you select a region, and runs Tesseract.
-3. On success the text is copied to the clipboard and the overlay is summoned.
-4. The overlay pastes the clipboard and translates through the configured provider (DeepSeek by default).
+2. **Super+Shift+T** uses the same pipeline as `omarchy capture text`: freeze, select a region, Tesseract. **Super+Shift+D** skips OCR: snapshot the clipboard, copy the selection with the same chords as Super+C, then open the overlay only with text that is new relative to that snapshot (or the primary selection). Leftover clipboard is not translated.
+3. On success the text is copied to the clipboard and the overlay is summoned with an explicit payload (plus `pending.json` as backup).
+4. The overlay uses that payload, not a guessed clipboard paste, and translates through the configured provider (DeepSeek by default).
 
-Canceling the selection, or getting empty OCR, does nothing. Leftover clipboard text is not translated.
+Canceling the OCR region, getting empty OCR, or having no new selected text does nothing. Leftover clipboard text is not translated.
 
 Change the language dropdowns on the overlay, then press Enter to retranslate in the new direction.
 
@@ -182,7 +198,7 @@ Optional: `OMARCHY_OCR_LANGS` (default `eng`). Mixed Chinese/English needs extra
 omarchy plugin remove dawei.ocr-translate
 ```
 
-Then delete the Super+Shift+T line from `~/.config/hypr/bindings.lua`. See [docs/uninstall.md](docs/uninstall.md) for the rest.
+Then delete the `dofile(.../dawei.ocr-translate/hypr/bindings.lua)` line and any `ocr_translate.bind(...)` override from `~/.config/hypr/bindings.lua`. See [docs/uninstall.md](docs/uninstall.md) for the rest.
 
 ## License
 

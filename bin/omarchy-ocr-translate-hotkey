@@ -1,10 +1,118 @@
 #!/usr/bin/env bash
-# SUPER+SHIFT+T: hide overlay, OCR a region (same pipeline as omarchy-capture-text),
+# Default: hide overlay, OCR a region (same pipeline as omarchy-capture-text),
 # then summon dawei.ocr-translate. Do not call omarchy-capture-text: cancel also
 # exits 0 and would otherwise translate leftover clipboard.
+#
+# --snapshot: write the current clipboard to old-clip (Hyprland calls this
+# before synthesizing Super+C's copy chords).
+# --clipboard / --selection: skip OCR. Open the overlay only with new selected
+# text, never leftover clipboard.
 set -euo pipefail
 
 PLUGIN_ID="dawei.ocr-translate"
+STATE_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/ocr-translate"
+OLD_CLIP_FILE="$STATE_DIR/old-clip"
+PENDING_FILE="$STATE_DIR/pending.json"
+LOG_FILE="$STATE_DIR/last-hotkey.log"
+
+mode=ocr
+case "${1:-}" in
+  --snapshot) mode=snapshot ;;
+  --clipboard|--selection) mode=selection ;;
+  "" ) ;;
+  -h|--help)
+    printf '%s\n' "Usage: omarchy-ocr-translate-hotkey [--snapshot|--clipboard|--selection]"
+    exit 0
+    ;;
+  *)
+    echo "unknown argument: $1" >&2
+    exit 1
+    ;;
+esac
+
+read_plain() {
+  local extra=()
+  [[ ${1:-} == primary ]] && extra+=(--primary)
+  timeout 0.25 wl-paste --no-newline -t text/plain "${extra[@]}" 2>/dev/null \
+    || timeout 0.25 wl-paste --no-newline "${extra[@]}" 2>/dev/null \
+    || true
+}
+
+blank() {
+  [[ -z ${1//[[:space:]]/} ]]
+}
+
+log_hotkey() {
+  mkdir -p "$STATE_DIR"
+  printf '%s\n' "$*" > "$LOG_FILE" 2>/dev/null || true
+}
+
+summon_with_text() {
+  local text=$1
+  local kind=${2:-hotkey}
+  local payload
+  payload=$(jq -n --arg text "$text" --arg mode "$kind" '{text:$text,mode:$mode}')
+  mkdir -p "$STATE_DIR"
+  printf '%s\n' "$payload" > "$PENDING_FILE"
+  printf "%s" "$text" | timeout 0.5 wl-copy || true
+  omarchy-shell -q shell hide "$PLUGIN_ID"
+  sleep 0.15
+  omarchy-shell shell summon "$PLUGIN_ID" "$payload"
+}
+
+if [[ $mode == snapshot ]]; then
+  mkdir -p "$STATE_DIR"
+  tmp="$OLD_CLIP_FILE.tmp"
+  read_plain > "$tmp" || true
+  mv -f "$tmp" "$OLD_CLIP_FILE"
+  snap=$(cat "$OLD_CLIP_FILE" || true)
+  log_hotkey "snapshot len=${#snap}"
+  exit 0
+fi
+
+if [[ $mode == selection ]]; then
+  if [[ ! -f $OLD_CLIP_FILE ]]; then
+    log_hotkey "source=none reason=no-snapshot"
+    omarchy-notification-send -g 󰴑 "No selected text"
+    exit 1
+  fi
+  old_clip=$(cat "$OLD_CLIP_FILE" || true)
+  TEXT=""
+  source=none
+  clip=""
+  prim=""
+
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+    clip=$(read_plain)
+    prim=$(read_plain primary)
+    if ! blank "$clip" && [[ $clip != "$old_clip" ]]; then
+      TEXT=$clip
+      source=clipboard
+      break
+    fi
+    if ! blank "$prim" && [[ $prim != "$old_clip" ]]; then
+      TEXT=$prim
+      source=primary
+      break
+    fi
+    sleep 0.05
+  done
+
+  if blank "$TEXT" && ! blank "$prim" && [[ $prim != "$old_clip" ]]; then
+    TEXT=$prim
+    source=primary
+  fi
+
+  log_hotkey "source=$source old_len=${#old_clip} clip_len=${#clip} prim_len=${#prim} text_len=${#TEXT}"
+
+  if blank "$TEXT"; then
+    omarchy-notification-send -g 󰴑 "No selected text"
+    exit 1
+  fi
+
+  summon_with_text "$TEXT" selection
+  exit 0
+fi
 
 omarchy-shell -q shell hide "$PLUGIN_ID"
 # Overlay unmap is async; wait so the freeze/picker is not covered.
@@ -36,6 +144,5 @@ if [[ -z $TEXT ]]; then
   exit 1
 fi
 
-printf "%s" "$TEXT" | wl-copy
 omarchy-notification-send -g 󰴑 "Copied text from selection to clipboard"
-omarchy-shell shell summon "$PLUGIN_ID"
+summon_with_text "$TEXT" ocr

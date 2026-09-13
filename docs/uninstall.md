@@ -8,7 +8,7 @@ That disables the overlay and removes `~/.config/omarchy/plugins/dawei.ocr-trans
 
 ## Keybinding
 
-Edit `~/.config/hypr/bindings.lua` and delete the Super+Shift+T OCR Translate binding. Leave `SUPER + T` (window float) unchanged, then:
+Edit `~/.config/hypr/bindings.lua` and delete the `dofile(.../dawei.ocr-translate/hypr/bindings.lua)` line and any `ocr_translate.bind(...)` override. Leave `SUPER + T` (window float) unchanged, then:
 
 ```bash
 hyprctl reload

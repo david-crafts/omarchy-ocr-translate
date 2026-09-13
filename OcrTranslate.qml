@@ -90,13 +90,61 @@ Item {
     saveLangProc.running = true
   }
 
+  readonly property string pendingFilePath: Quickshell.env("HOME") + "/.config/omarchy/ocr-translate/pending.json"
+
+  function parsePayload(payloadJson) {
+    if (payloadJson === undefined || payloadJson === null || payloadJson === "") return null
+    if (typeof payloadJson === "object") return payloadJson
+    try {
+      return JSON.parse(String(payloadJson))
+    } catch (e) {
+      return null
+    }
+  }
+
+  function payloadText(payloadJson) {
+    var p = root.parsePayload(payloadJson)
+    if (p && typeof p.text === "string") return p.text
+    return ""
+  }
+
+  function payloadMode(payloadJson) {
+    var p = root.parsePayload(payloadJson)
+    if (p && typeof p.mode === "string") return p.mode
+    return ""
+  }
+
+  function clearPending() {
+    clearPendingProc.running = false
+    clearPendingProc.running = true
+  }
+
+  function useSourceText(text) {
+    root.autoTranslateOnPaste = false
+    root.applySourceText(text)
+    root.clearPending()
+    Qt.callLater(function() { root.startTranslate() })
+  }
+
   function open(payloadJson) {
     root.opened = true
     root.busy = false
     root.resultText = ""
     root.translateGen += 1
-    root.autoTranslateOnPaste = true
     sourceArea.text = ""
+    root.autoTranslateOnPaste = false
+    var text = root.payloadText(payloadJson)
+    var mode = root.payloadMode(payloadJson)
+    if (text.length) {
+      root.useSourceText(text)
+      return
+    }
+    // Hotkey always writes pending.json. qs ipc may parse/drop the JSON arg.
+    if (mode === "selection" || mode === "ocr") {
+      pendingFile.reload()
+      return
+    }
+    root.autoTranslateOnPaste = true
     pasteProc.running = true
   }
 
@@ -153,6 +201,28 @@ Item {
     }
     translateProc.stdinEnabled = true
     translateProc.running = true
+  }
+
+  Process {
+    id: clearPendingProc
+    command: ["rm", "-f", root.pendingFilePath]
+  }
+
+  FileView {
+    id: pendingFile
+    path: root.pendingFilePath
+    watchChanges: false
+    printErrors: false
+    onLoaded: {
+      if (!root.opened || sourceArea.text.length) return
+      var text = root.payloadText(text())
+      if (text.length) root.useSourceText(text)
+      else root.resultText = "原文为空"
+    }
+    onLoadFailed: {
+      if (!root.opened || sourceArea.text.length) return
+      root.resultText = "原文为空"
+    }
   }
 
   FileView {

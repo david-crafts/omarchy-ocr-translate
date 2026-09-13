@@ -28,9 +28,10 @@ if [[ -L "$DEST" ]]; then
   rm -f "$DEST"
 fi
 
-mkdir -p "$DEST/bin/providers"
+mkdir -p "$DEST/bin/providers" "$DEST/hypr"
 cp -f "$ROOT/manifest.json" "$ROOT/OcrTranslate.qml" "$DEST/"
 cp -f "$ROOT/bin/omarchy-ocr-translate" "$ROOT/bin/omarchy-ocr-translate-hotkey" "$ROOT/bin/languages.tsv" "$DEST/bin/"
+cp -f "$ROOT/hypr/"* "$DEST/hypr/"
 cp -f "$ROOT/bin/providers/"* "$DEST/bin/providers/"
 chmod +x "$DEST/bin/omarchy-ocr-translate" "$DEST/bin/omarchy-ocr-translate-hotkey"
 chmod +x "$DEST/bin/providers/"*
